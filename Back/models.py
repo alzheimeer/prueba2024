@@ -1,6 +1,6 @@
 import mysql.connector
 import pymongo
-from bson import json_util
+from bson import json_util, ObjectId
 from flask import current_app as app
 
 class Producto:
@@ -35,28 +35,44 @@ class Producto:
                 conn.close()
 
 class Inventario:
-    @staticmethod
-    def obtener_inventario():
+    def __init__(self):
+        self.client = pymongo.MongoClient(app.config['MONGO_URI'])
+        self.db = self.client[app.config['MONGO_DBNAME']]
+        self.coleccion = self.db["inventario"]
+
+    def obtener_inventario(self):
         try:
-            client = pymongo.MongoClient(app.config['MONGO_URI'])
-            db = client[app.config['MONGO_DBNAME']]
-            inventario = list(db.inventario.find())
+            inventario = list(self.coleccion.find())
             return json_util.loads(json_util.dumps(inventario))
         except pymongo.errors.PyMongoError as err:
             print(f"Error al obtener inventario: {err}")
-            return []
-        finally:
-            client.close()
+            raise
 
-    @staticmethod
-    def agregar_a_inventario(data):
+    def agregar_a_inventario(self, data):
         try:
-            client = pymongo.MongoClient(app.config['MONGO_URI'])
-            db = client[app.config['MONGO_DBNAME']]
-            resultado = db.inventario.insert_one(data)
+            if 'entregado' not in data:
+                data['entregado'] = False
+            resultado = self.coleccion.insert_one(data)
             return {"mensaje": "Inventario creado exitosamente", "id_inventario": str(resultado.inserted_id)}
         except pymongo.errors.PyMongoError as err:
             print(f"Error al agregar al inventario: {err}")
-            return {"mensaje": "Error al crear el inventario"}
-        finally:
-            client.close()
+            raise
+
+    def actualizar_inventario(self, id_inventario, data):
+        try:
+            # Obtener el documento de inventario por su ID
+            inventario = self.coleccion.find_one({"_id": ObjectId(id_inventario)})
+            if inventario:
+                # Actualizar el campo "entregado" del inventario
+                campos_actualizados = {}
+                if 'entregado' in data:
+                    campos_actualizados['entregado'] = data['entregado']
+                resultado = self.coleccion.update_one(
+                    {"_id": ObjectId(id_inventario)},
+                    {"$set": campos_actualizados}
+                )
+                return resultado.modified_count > 0
+            return False
+        except pymongo.errors.PyMongoError as err:
+            print(f"Error al actualizar el inventario: {err}")
+            raise

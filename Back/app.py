@@ -1,8 +1,10 @@
 from flask import Flask, jsonify
 from routes import api_blueprint  
+from flask_cors import CORS
 
 def create_app():
     app = Flask(__name__)
+    CORS(app, resources={r"/*": {"origins": "http://localhost:4200"}})
     # Carga configuraciones desde config.py
     app.config.from_pyfile('config.py')
     # Registra el Blueprint de la API
